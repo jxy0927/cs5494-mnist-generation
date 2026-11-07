@@ -1,0 +1,215 @@
+{
+  "fvsbn_8": {
+    "train_size": 55000,
+    "valid_size": 5000,
+    "test_size": 10000,
+    "active_parameters": 307720,
+    "channels": 0,
+    "mask_b_layers": 0,
+    "epochs": 8,
+    "steps": 3440,
+    "best_epoch": 8,
+    "val_nll": 85.263425,
+    "test_nll": 83.77476875,
+    "train_seconds": 2.696881999989273,
+    "sample_seconds": 0.0540923000080511,
+    "bf16_training": false,
+    "experiment": "fvsbn",
+    "seed": 5494,
+    "batch": 128,
+    "sample_count": 25,
+    "smoke": false,
+    "device": "NVIDIA GeForce RTX 5060 Laptop GPU",
+    "python": "3.13.5",
+    "torch": "2.9.1+cu128",
+    "torchvision": "0.24.1+cu128"
+  },
+  "fvsbn_24": {
+    "train_size": 55000,
+    "valid_size": 5000,
+    "test_size": 10000,
+    "active_parameters": 307720,
+    "channels": 0,
+    "mask_b_layers": 0,
+    "first_kernel": null,
+    "epochs": 24,
+    "steps": 10320,
+    "best_epoch": 24,
+    "val_nll": 77.52059375,
+    "test_nll": 76.02954375,
+    "train_seconds": 8.701507500023581,
+    "sample_seconds": 0.06311369998729788,
+    "bf16_training": false,
+    "experiment": "fvsbn",
+    "seed": 5494,
+    "batch": 128,
+    "sample_count": 25,
+    "smoke": false,
+    "device": "NVIDIA GeForce RTX 5060 Laptop GPU",
+    "python": "3.13.5",
+    "torch": "2.9.1+cu128",
+    "torchvision": "0.24.1+cu128"
+  },
+  "pixelcnn_3": {
+    "train_size": 55000,
+    "valid_size": 5000,
+    "test_size": 10000,
+    "active_parameters": 15649,
+    "channels": 32,
+    "mask_b_layers": 3,
+    "epochs": 8,
+    "steps": 3440,
+    "best_epoch": 8,
+    "val_nll": 79.86253125,
+    "test_nll": 79.2910875,
+    "train_seconds": 7.862471700005699,
+    "sample_seconds": 0.29773210000712425,
+    "bf16_training": true,
+    "experiment": "pixelcnn",
+    "seed": 5494,
+    "batch": 128,
+    "sample_count": 25,
+    "smoke": false,
+    "device": "NVIDIA GeForce RTX 5060 Laptop GPU",
+    "python": "3.13.5",
+    "torch": "2.9.1+cu128",
+    "torchvision": "0.24.1+cu128"
+  },
+  "pixelcnn_7": {
+    "train_size": 55000,
+    "valid_size": 5000,
+    "test_size": 10000,
+    "active_parameters": 16289,
+    "channels": 32,
+    "mask_b_layers": 3,
+    "first_kernel": 7,
+    "epochs": 8,
+    "steps": 3440,
+    "best_epoch": 8,
+    "val_nll": 72.5373625,
+    "test_nll": 72.14571875,
+    "train_seconds": 21.095036999991862,
+    "sample_seconds": 0.331482200010214,
+    "bf16_training": true,
+    "experiment": "pixelcnn",
+    "seed": 5494,
+    "batch": 128,
+    "sample_count": 25,
+    "smoke": false,
+    "device": "NVIDIA GeForce RTX 5060 Laptop GPU",
+    "python": "3.13.5",
+    "torch": "2.9.1+cu128",
+    "torchvision": "0.24.1+cu128"
+  },
+  "gan_seed_results": {
+    "5494": {
+      "gan": {
+        "counts": [
+          18,
+          679,
+          136,
+          287,
+          130,
+          57,
+          48,
+          214,
+          190,
+          241
+        ],
+        "entropy_bits": 2.823169231414795,
+        "top_share": 0.3395000100135803,
+        "mean_confidence": 0.8499717712402344
+      },
+      "gan_features": {
+        "counts": [
+          41,
+          383,
+          182,
+          349,
+          117,
+          210,
+          184,
+          211,
+          97,
+          226
+        ],
+        "entropy_bits": 3.132997512817383,
+        "top_share": 0.1915000081062317,
+        "mean_confidence": 0.8256808519363403
+      }
+    },
+    "5495": {
+      "gan": {
+        "counts": [
+          41,
+          594,
+          229,
+          133,
+          96,
+          137,
+          77,
+          344,
+          116,
+          233
+        ],
+        "entropy_bits": 2.945713996887207,
+        "top_share": 0.2970000207424164,
+        "mean_confidence": 0.8252126574516296
+      },
+      "gan_features": {
+        "counts": [
+          97,
+          505,
+          152,
+          199,
+          162,
+          151,
+          211,
+          176,
+          116,
+          231
+        ],
+        "entropy_bits": 3.1508431434631348,
+        "top_share": 0.2524999976158142,
+        "mean_confidence": 0.8352327346801758
+      }
+    },
+    "5496": {
+      "gan": {
+        "counts": [
+          31,
+          716,
+          163,
+          316,
+          91,
+          54,
+          91,
+          215,
+          97,
+          226
+        ],
+        "entropy_bits": 2.7985715866088867,
+        "top_share": 0.3580000102519989,
+        "mean_confidence": 0.8201998472213745
+      },
+      "gan_features": {
+        "counts": [
+          5,
+          632,
+          155,
+          165,
+          219,
+          188,
+          111,
+          175,
+          87,
+          263
+        ],
+        "entropy_bits": 2.920435905456543,
+        "top_share": 0.3160000145435333,
+        "mean_confidence": 0.8107025623321533
+      }
+    }
+  },
+  "classifier_test_accuracy": 0.9768999814987183
+}

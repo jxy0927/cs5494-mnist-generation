@@ -1,6 +1,7 @@
-"""Evaluate class coverage with a fixed MNIST classifier and plot the results."""
+"""Evaluate generated digit coverage with a fixed MNIST classifier."""
+import argparse
 import json
-
+from pathlib import Path
 
 import torch
 from torch import nn
@@ -28,7 +29,7 @@ def describe(probabilities):
     }
 
 
-def probe():
+def probe(extra_gan_root=None):
     torch.manual_seed(SEED)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     original = MNIST(ROOT / "data", train=True, download=True)
@@ -54,17 +55,34 @@ def probe():
     with torch.inference_mode():
         gen, _ = make_gan()
         gen.to(device).eval()
-        for run in ("gan", "gan_features"):
-            checkpoint = torch.load(RUNS / run / "model.pt", map_location=device)
-            gen.load_state_dict(checkpoint["generator"])
-            # Use exactly the same independent latents for both GANs.
-            noise = torch.randn(2000, LATENT, device=device, generator=rng_on(device, 11))
-            generated = (gen(noise) + 1) / 2
-            results[run] = describe(predictions(model, generated))
+        variants = ("gan", "gan_features")
+        # Use the same 2,000 independent latents for every checkpoint.
+        noise = torch.randn(2000, LATENT, device=device, generator=rng_on(device, 11))
+
+        def coverage(folder):
+            scores = {}
+            for run in variants:
+                checkpoint = torch.load(folder / run / "model.pt", map_location=device)
+                gen.load_state_dict(checkpoint["generator"])
+                generated = (gen(noise) + 1) / 2
+                scores[run] = describe(predictions(model, generated))
+            return scores
+
+        results.update(coverage(RUNS))
+        if extra_gan_root is not None:
+            repeated = {str(SEED): {run: results[run] for run in variants}}
+            for folder in sorted(extra_gan_root.glob("seed-*")):
+                seed = int(folder.name.removeprefix("seed-"))
+                repeated[str(seed)] = coverage(folder)
+            save_json(extra_gan_root / "gan_seed_probe.json", repeated)
     save_json(RUNS / "gan_probe.json", results)
     print(json.dumps(results, indent=2))
 
 
 if __name__ == "__main__":
-    probe()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--extra-gan-root", type=Path,
+                        help="Optional directory containing paired GAN runs in seed-* folders.")
+    probe(parser.parse_args().extra_gan_root)
+
 

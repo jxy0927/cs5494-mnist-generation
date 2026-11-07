@@ -2,27 +2,21 @@
 
 ## Assignment requirements
 
-Train a Fully Visible Sigmoid Belief Network (FVSBN) and a neural autoregressive model on binarized MNIST, then train a GAN on the original grayscale MNIST. The report documents the models, training progress, generated samples, and training and inference times, with code and data links for reproduction.
+Train a Fully Visible Sigmoid Belief Network (FVSBN) and a neural autoregressive model on binarized MNIST, then train a GAN on the original grayscale MNIST. The report documents the models, training progress, generated samples, and training and inference times.
 
-## Models
+## Models and experiments
 
-| Task | Model | Method |
+| Task | Model | Method and evaluation |
 | --- | --- | --- |
-| 1.1 | FVSBN | A logistic regression for each pixel predicts its Bernoulli probability from preceding pixels in row-major order. A strictly lower-triangular mask enforces the ordering. |
-| 1.2 | PixelCNN | A 32-channel CNN uses a Mask A input convolution and three Mask B layers to predict binary pixels without seeing the current or future input pixels. |
-| 1.3 | MLP GAN | A generator maps 64-dimensional Gaussian noise to 28 × 28 grayscale images. A discriminator learns to distinguish real and generated images. |
+| 1.1 | FVSBN | A masked logistic regression per pixel estimates its Bernoulli probability from preceding pixels in row-major order. Compare 8 and 24 epochs. |
+| 1.2 | PixelCNN | A 32-channel masked CNN uses a Mask A input convolution and three Mask B layers. Vary depth (3 vs. 1 Mask B layers), width (32 vs. 16 channels), training set size (55,000 vs. 10,000), and the first-layer kernel (3 × 3 vs. 7 × 7). |
+| 1.3 | MLP GAN | Generate 28 × 28 grayscale digits from 64-dimensional Gaussian noise. Compare the baseline objective and a feature-matching variant across three training seeds. |
 
-## Experimental design
-
-- **Autoregressive comparison.** Train FVSBN and PixelCNN on the same 55,000 binarized images and select checkpoints using a 5,000-image validation split. Compare test negative log-likelihood, generated samples, and training and sampling times.
-- **PixelCNN ablations.** Vary the number of Mask B layers (3 vs. 1), channel width (32 vs. 16), and training set size (55,000 vs. 10,000) one at a time. Compare validation likelihood and runtime.
-- **GAN stability.** Compare the baseline GAN with a feature-matching variant using the same architecture and training budget. Inspect loss curves and fixed-noise sample grids across epochs. Use a classifier trained on real MNIST to estimate digit coverage on 2,000 generated samples per variant.
+The autoregressive runs share a fixed MNIST split and binarization rule. Validation NLL selects checkpoints. Test NLL, uncurated samples, and runtime characterize the primary comparisons. For GANs, inspect loss curves and fixed-noise grids, and evaluate predicted digit coverage using the same classifier and 2,000 latent draws per checkpoint.
 
 ## Reproduce the experiments
 
-1. Save [train.py](train.py), [analyze.py](analyze.py), [plot_results.py](plot_results.py), and [mnist-data.zip](mnist-data.zip) in the same directory.
-2. Use Python with a CUDA-enabled PyTorch build, matching torchvision, and matplotlib. The original runs used Python 3.13.5, PyTorch 2.9.1+cu128, torchvision 0.24.1+cu128, and matplotlib 3.10.0. On Colab, select a GPU runtime.
-3. Run these commands from that directory:
+Clone the repository or save [train.py](train.py), [analyze.py](analyze.py), [plot_results.py](plot_results.py), and [mnist-data.zip](mnist-data.zip) in one directory. Use Python with a CUDA-enabled PyTorch build, matching torchvision, and matplotlib. The runs used Python 3.13.5, PyTorch 2.9.1+cu128, torchvision 0.24.1+cu128, and matplotlib 3.10.0. On Colab, select a GPU runtime.
 
 ```bash
 python -m zipfile -e mnist-data.zip .
@@ -31,4 +25,22 @@ python analyze.py
 python plot_results.py
 ```
 
-The dataset extracts to `data/MNIST/raw/`. Training saves checkpoints, loss histories, timing summaries, and samples to `runs/`. Analysis and plotting produce coverage statistics and figures. For a quick installation check, run `python train.py all --smoke --output smoke`.
+The dataset extracts to `data/MNIST/raw/`. Training saves checkpoints, histories, timings, and sample grids to `runs/`. For a quick installation check, run `python train.py all --smoke --output smoke`.
+
+### Follow-up experiments
+
+Run the primary experiments first, then run the commands below from the same directory. The original GAN pair uses seed 5494. The two new pairs vary training randomness while keeping the data split and evaluation latents fixed.
+
+```bash
+python train.py fvsbn --ar-epochs 24 --output runs/supplemental/fvsbn-24
+python train.py pixelcnn --first-kernel 7 --output runs/supplemental/pixel-7
+python train.py gan --seed 5495 --output runs/supplemental/seed-5495
+python train.py gan_features --seed 5495 --output runs/supplemental/seed-5495
+python train.py gan --seed 5496 --output runs/supplemental/seed-5496
+python train.py gan_features --seed 5496 --output runs/supplemental/seed-5496
+python analyze.py --extra-gan-root runs/supplemental
+```
+
+See [supplemental-results.json](supplemental-results.json) for measured likelihood, timing, and per-seed coverage results.
+
+

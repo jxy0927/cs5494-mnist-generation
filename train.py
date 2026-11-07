@@ -50,20 +50,23 @@ class FVSBN(nn.Module):
 
 
 class MaskedConv(nn.Conv2d):
-    def __init__(self, inputs, outputs, include_center):
-        super().__init__(inputs, outputs, 3, padding=1)
-        mask = torch.tensor([[1, 1, 1], [1, int(include_center), 0], [0, 0, 0]])
-        self.register_buffer("mask", mask.float().reshape(1, 1, 3, 3))
+    def __init__(self, inputs, outputs, include_center, kernel=3):
+        center = kernel // 2
+        super().__init__(inputs, outputs, kernel, padding=center)
+        mask = torch.zeros(kernel, kernel)
+        mask[:center] = 1
+        mask[center, :center + int(include_center)] = 1
+        self.register_buffer("mask", mask[None, None])
 
     def forward(self, x):
         # Apply the mask on every pass, including during optimization.
-        return F.conv2d(x, self.weight * self.mask, self.bias, padding=1)
+        return F.conv2d(x, self.weight * self.mask, self.bias, padding=self.padding)
 
 
 class PixelCNN(nn.Module):
-    def __init__(self, channels, depth):
+    def __init__(self, channels, depth, first_kernel=3):
         super().__init__()
-        layers = [MaskedConv(1, channels, False), nn.ReLU()]
+        layers = [MaskedConv(1, channels, False, first_kernel), nn.ReLU()]
         for _ in range(depth):
             layers.extend([MaskedConv(channels, channels, True), nn.ReLU()])
         self.layers = nn.Sequential(*layers, nn.Conv2d(channels, 1, 1))
@@ -81,8 +84,8 @@ class PixelCNN(nn.Module):
         return x
 
 
-def rng_on(device, offset):
-    return torch.Generator(device=device).manual_seed(SEED + offset)
+def rng_on(device, offset, seed=SEED):
+    return torch.Generator(device=device).manual_seed(seed + offset)
 
 
 def save_json(path, value):
@@ -151,15 +154,15 @@ def evaluate_nll(model, data):
     return total.item() / len(data)
 
 
-def train_ar(name, data, device, folder, epochs):
+def train_ar(name, data, device, folder, epochs, seed, first_kernel):
     channels, depth, limit = CONFIGS[name]
     train, valid, test = data
     train = train[:limit]
-    model = FVSBN() if name == "fvsbn" else PixelCNN(channels, depth)
+    model = FVSBN() if name == "fvsbn" else PixelCNN(channels, depth, first_kernel)
     model = model.to(device=device, memory_format=torch.channels_last)
     check_causality(model, valid[:2])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
-    rng = rng_on(device, 1)
+    rng = rng_on(device, 1, seed)
     mixed = channels > 0 and device.type == "cuda"
     main_config = name in {"fvsbn", "pixelcnn"}
     best = float("inf")
@@ -188,22 +191,23 @@ def train_ar(name, data, device, folder, epochs):
             best_epoch = epoch
             torch.save(model.state_dict(), folder / "model.pt")
         if main_config and epoch in {1, max(1, epochs // 2), epochs}:
-            images = model.sample(10, rng_on(device, 2))
+            images = model.sample(10, rng_on(device, 2, seed))
             save_image(images, folder / f"epoch_{epoch:02d}.png", nrow=5)
         save_json(folder / "history.json", history)
         print(name, row, flush=True)
 
     model.load_state_dict(torch.load(folder / "model.pt", map_location=device))
     check_causality(model, valid[:2])
-    sample_rng = rng_on(device, 3)
+    sample_rng = rng_on(device, 3, seed)
     latency = measure_samples(lambda n: model.sample(n, sample_rng), device, folder)
     if channels == 0:
         active = PIXELS * (PIXELS - 1) // 2 + PIXELS
     else:
-        active = 5 * channels + depth * (5 * channels ** 2 + channels) + channels + 1
+        active = ((first_kernel ** 2 - 1) // 2 + 1) * channels + depth * (5 * channels ** 2 + channels) + channels + 1
     return {
         "train_size": len(train), "valid_size": len(valid), "test_size": len(test),
         "active_parameters": active, "channels": channels, "mask_b_layers": depth,
+        "first_kernel": first_kernel if channels else None,
         "epochs": epochs, "steps": epochs * ((len(train) + BATCH - 1) // BATCH),
         "best_epoch": best_epoch, "val_nll": best,
         "test_nll": evaluate_nll(model, test) if main_config else None,
@@ -223,14 +227,14 @@ def make_gan():
     return generator, discriminator
 
 
-def train_gan(data, device, folder, epochs, feature_weight):
+def train_gan(data, device, folder, epochs, feature_weight, seed):
     train = data[0]
     gen, disc = (module.to(device) for module in make_gan())
     features = disc[:-1]
     gen_opt = torch.optim.Adam(gen.parameters(), lr=2e-4, betas=(0.5, 0.999))
     disc_opt = torch.optim.Adam(disc.parameters(), lr=2e-4, betas=(0.5, 0.999))
-    rng = rng_on(device, 1)
-    fixed = torch.randn(4, LATENT, device=device, generator=rng_on(device, 2))
+    rng = rng_on(device, 1, seed)
+    fixed = torch.randn(4, LATENT, device=device, generator=rng_on(device, 2, seed))
     stages = sorted({0, round(epochs / 4), round(epochs / 2), round(epochs * 3 / 4), epochs})
 
     @torch.inference_mode()
@@ -284,7 +288,7 @@ def train_gan(data, device, folder, epochs, feature_weight):
     torch.save({"generator": gen.state_dict(), "discriminator": disc.state_dict()},
                folder / "model.pt")
     save_image(torch.cat(progress), folder / "progress.png", nrow=4)
-    sample_rng = rng_on(device, 3)
+    sample_rng = rng_on(device, 3, seed)
 
     def draw(count):
         return render(torch.randn(count, LATENT, device=device, generator=sample_rng))
@@ -304,6 +308,10 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / "runs")
     parser.add_argument("--ar-epochs", type=int, default=8)
     parser.add_argument("--gan-epochs", type=int, default=20)
+    parser.add_argument("--seed", type=int, default=SEED,
+                        help="Model, batch order and sampling seed. Data split stays fixed.")
+    parser.add_argument("--first-kernel", choices=[3, 7], type=int, default=3,
+                        help="Size of PixelCNN's first Mask A convolution.")
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
     device = torch.device(args.device)
@@ -322,15 +330,15 @@ def main():
         if current_kind != binary:
             data = load_data(args.data, device, binary, args.smoke)
             current_kind = binary
-        torch.manual_seed(SEED)
+        torch.manual_seed(args.seed)
         folder = args.output / name
         folder.mkdir(parents=True, exist_ok=True)
         epochs = 1 if args.smoke else args.ar_epochs if binary else args.gan_epochs
         if binary:
-            metrics = train_ar(name, data, device, folder, epochs)
+            metrics = train_ar(name, data, device, folder, epochs, args.seed, args.first_kernel)
         else:
-            metrics = train_gan(data, device, folder, epochs, 10.0 if name == "gan_features" else 0.0)
-        metrics.update({"experiment": name, "seed": SEED, "batch": BATCH,
+            metrics = train_gan(data, device, folder, epochs, 10.0 if name == "gan_features" else 0.0, args.seed)
+        metrics.update({"experiment": name, "seed": args.seed, "batch": BATCH,
                         "sample_count": COUNT, "smoke": args.smoke,
                         "device": torch.cuda.get_device_name() if device.type == "cuda" else "CPU",
                         "python": platform.python_version(), "torch": torch.__version__,
