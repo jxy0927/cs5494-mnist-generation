@@ -1,0 +1,70 @@
+"""Evaluate class coverage with a fixed MNIST classifier and plot the results."""
+import json
+
+
+import torch
+from torch import nn
+from torchvision.datasets import MNIST
+
+from train import ROOT, SEED, LATENT, make_gan, rng_on, save_json
+
+RUNS = ROOT / "runs"
+
+
+@torch.inference_mode()
+def predictions(model, images):
+    return torch.cat([model(batch).softmax(dim=1) for batch in images.split(256)])
+
+
+def describe(probabilities):
+    confidence, labels = probabilities.max(dim=1)
+    counts = labels.bincount(minlength=10)
+    shares = counts.float() / len(labels)
+    return {
+        "counts": counts.tolist(),
+        "entropy_bits": float(-torch.special.xlogy(shares, shares).sum() / torch.log(torch.tensor(2.0, device=shares.device))),
+        "top_share": float(shares.max()),
+        "mean_confidence": float(confidence.mean()),
+    }
+
+
+def probe():
+    torch.manual_seed(SEED)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    original = MNIST(ROOT / "data", train=True, download=True)
+    held_out = MNIST(ROOT / "data", train=False, download=True)
+    split = torch.randperm(len(original), generator=rng_on("cpu", 0))[5000:]
+    x = original.data[split].to(device).float().div(255)
+    y = original.targets[split].to(device)
+    model = nn.Sequential(nn.Flatten(), nn.Linear(784, 256), nn.ReLU(),
+                          nn.Linear(256, 128), nn.ReLU(), nn.Linear(128, 10)).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    shuffle = rng_on(device, 10)
+    for _ in range(5):
+        for indices in torch.randperm(len(x), device=device, generator=shuffle).split(256):
+            optimizer.zero_grad(set_to_none=True)
+            loss = nn.functional.cross_entropy(model(x[indices]), y[indices])
+            loss.backward()
+            optimizer.step()
+    model.eval()
+    actual = held_out.data.to(device).float().div(255)
+    real_probabilities = predictions(model, actual)
+    accuracy = (real_probabilities.argmax(1).cpu() == held_out.targets).float().mean()
+    results = {"test_accuracy": float(accuracy), "real": describe(real_probabilities)}
+    with torch.inference_mode():
+        gen, _ = make_gan()
+        gen.to(device).eval()
+        for run in ("gan", "gan_features"):
+            checkpoint = torch.load(RUNS / run / "model.pt", map_location=device)
+            gen.load_state_dict(checkpoint["generator"])
+            # Use exactly the same independent latents for both GANs.
+            noise = torch.randn(2000, LATENT, device=device, generator=rng_on(device, 11))
+            generated = (gen(noise) + 1) / 2
+            results[run] = describe(predictions(model, generated))
+    save_json(RUNS / "gan_probe.json", results)
+    print(json.dumps(results, indent=2))
+
+
+if __name__ == "__main__":
+    probe()
+
